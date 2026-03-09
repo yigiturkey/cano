@@ -4,7 +4,7 @@
 
 [![Star History Chart](https://api.star-history.com/svg?repos=saidsurucu/yargi-mcp&type=Date)](https://www.star-history.com/#saidsurucu/yargi-mcp&Date)
 
-Bu proje, çeşitli Türk hukuk kaynaklarına (Yargıtay, Danıştay, Emsal Kararlar, Uyuşmazlık Mahkemesi, Anayasa Mahkemesi - Norm Denetimi ile Bireysel Başvuru Kararları, Kamu İhale Kurulu Kararları, Rekabet Kurumu Kararları, Sayıştay Kararları, KVKK Kararları ve BDDK Kararları) erişimi kolaylaştıran bir [FastMCP](https://gofastmcp.com/) sunucusu oluşturur. Bu sayede, bu kaynaklardan veri arama ve belge getirme işlemleri, Model Context Protocol (MCP) destekleyen LLM (Büyük Dil Modeli) uygulamaları (örneğin Claude Desktop veya [5ire](https://5ire.app)) ve diğer istemciler tarafından araç (tool) olarak kullanılabilir hale gelir.
+Bu proje, çeşitli Türk hukuk kaynaklarına (Yargıtay, Danıştay, Emsal Kararlar, Uyuşmazlık Mahkemesi, Anayasa Mahkemesi - Norm Denetimi ile Bireysel Başvuru Kararları, Kamu İhale Kurulu Kararları, Rekabet Kurumu Kararları, Sayıştay Kararları, KVKK Kararları, BDDK Kararları ve Sigorta Tahkim Komisyonu Kararları) erişimi kolaylaştıran bir [FastMCP](https://gofastmcp.com/) sunucusu oluşturur. Bu sayede, bu kaynaklardan veri arama ve belge getirme işlemleri, Model Context Protocol (MCP) destekleyen LLM (Büyük Dil Modeli) uygulamaları (örneğin Claude Desktop veya [5ire](https://5ire.app)) ve diğer istemciler tarafından araç (tool) olarak kullanılabilir hale gelir.
 
 ---
 
@@ -75,6 +75,7 @@ Bu proje, çeşitli Türk hukuk kaynaklarına (Yargıtay, Danıştay, Emsal Kara
     * **Sayıştay:** 3 karar türü ile kapsamlı denetim kararlarına erişim + **8 Daire Filtreleme** + **Tarih Aralığı & İçerik Arama** (Genel Kurul yorumlayıcı kararları, Temyiz Kurulu itiraz kararları, Daire ilk derece denetim kararları)
     * **KVKK (Kişisel Verilerin Korunması Kurulu):** Brave Search API ile veri koruma kararlarını arama; uzun karar metinlerini (5.000 karakterlik) sayfalanmış Markdown formatında getirme + **Türkçe Arama** + **Site Hedeflemeli Arama** (kvkk.gov.tr kararları)
     * **BDDK (Bankacılık Düzenleme ve Denetleme Kurumu):** Bankacılık düzenleme kararlarını arama; karar metinlerini Markdown formatında getirme + **Optimized Search** + **"Karar Sayısı" Targeting** + **Spesifik URL Filtreleme** (bddk.org.tr/Mevzuat/DokumanGetir)
+    * **Sigorta Tahkim Komisyonu:** Hakem Karar Dergisi (64 sayı, 2010-2025) içindeki sigorta tahkim kararlarını arama; dergi PDF'lerini Markdown formatında getirme + **Sayı İçi Karar Arama** + **Türkçe Büyük/Küçük Harf Desteği** + **Relevance Scoring**
 
 * Karar metinlerinin daha kolay işlenebilmesi için Markdown formatına çevrilmesi.
 * Claude Desktop uygulaması ile `fastmcp install` komutu kullanılarak kolay entegrasyon.
@@ -228,14 +229,14 @@ OPENROUTER_API_KEY=sk-or-v1-xxx...
 }
 ```
 
-> 💡 **Not:** `OPENROUTER_API_KEY` ayarlanmazsa semantik arama aracı görünmez, diğer 19 araç normal şekilde çalışmaya devam eder.
+> 💡 **Not:** `OPENROUTER_API_KEY` ayarlanmazsa semantik arama aracı görünmez, diğer 22 araç normal şekilde çalışmaya devam eder.
 
 </details>
 
 <details>
 <summary>🛠️ <strong>Kullanılabilir Araçlar (MCP Tools)</strong></summary>
 
-Bu FastMCP sunucusu **19 temel MCP aracı** + **1 opsiyonel semantik arama aracı** sunar (token verimliliği için optimize edilmiş):
+Bu FastMCP sunucusu **22 temel MCP aracı** + **1 opsiyonel semantik arama aracı** sunar (token verimliliği için optimize edilmiş):
 
 ### **Yargıtay Araçları (Birleşik Bedesten API - Token Optimized)**
 *Not: Yargıtay araçları token verimliliği için birleşik Bedesten API'ye entegre edilmiştir*
@@ -285,6 +286,11 @@ Bu FastMCP sunucusu **19 temel MCP aracı** + **1 opsiyonel semantik arama arac�
     * `search_bddk_decisions(keywords, page)`: BDDK (Bankacılık Düzenleme ve Denetleme Kurumu) kararlarını arar. **"Karar Sayısı" targeting** + **Spesifik URL filtreleme** (`bddk.org.tr/Mevzuat/DokumanGetir`) + **Optimized search**
     * `get_bddk_document_markdown(document_id: str, page_number: Optional[int] = 1)`: BDDK kararının tam metnini **sayfalanmış Markdown** formatında getirir (5.000 karakterlik sayfa)
 
+### Sigorta Tahkim Komisyonu Araçları (Tavily Search API + PDF)
+    * `search_sigorta_tahkim_decisions(keywords, page, pageSize)`: Sigorta Tahkim Komisyonu kararlarını Tavily Search API ile arar. **Site hedeflemeli** (`sigortatahkim.org`) + **Sayfalama desteği**
+    * `get_sigorta_tahkim_document_markdown(issue_number: str, page_number: int)`: Hakem Karar Dergisi sayısının PDF'ini indirip **sayfalanmış Markdown** formatında getirir (5.000 karakterlik sayfa). 64 sayı (2010-2025)
+    * `search_within_sigorta_tahkim_issue(issue_number: str, keyword: str, max_results: int)`: Belirli bir dergi sayısı içindeki kararları anahtar kelime ile arar. **Türkçe İ/I desteği** + **Relevance scoring** + **Excerpt** ile sonuç
+
 </details>
 
 ---
@@ -299,8 +305,8 @@ Bu FastMCP sunucusu **19 temel MCP aracı** + **1 opsiyonel semantik arama arac�
 - **Korunan İşlevsellik:** %100 özellik desteği devam ediyor
 
 **GENEL İSTATİSTİKLER:**
-- **Toplam Mahkeme/Kurum:** 13 farklı hukuki kurum (KVKK dahil)
-- **Toplam MCP Tool:** 19 temel araç + 1 opsiyonel semantik arama aracı  
+- **Toplam Mahkeme/Kurum:** 14 farklı hukuki kurum (Sigorta Tahkim Komisyonu dahil)
+- **Toplam MCP Tool:** 22 temel araç + 1 opsiyonel semantik arama aracı
 - **Daire/Kurul Filtreleme:** 87 farklı seçenek (52 Yargıtay + 27 Danıştay + 8 Sayıştay)
 - **Tarih Filtreleme:** Birleşik Bedesten API aracında ISO 8601 formatında tam tarih aralığı desteği
 - **Kesin Cümle Arama:** Birleşik Bedesten API aracında çift tırnak ile tam cümle arama (`"\"mülkiyet kararı\""` formatı)
