@@ -329,6 +329,12 @@ from bddk_mcp_module.models import (
     BddkSearchRequest
 )
 
+# Sigorta Tahkim Module Imports
+from sigorta_tahkim_mcp_module.client import SigortaTahkimApiClient
+from sigorta_tahkim_mcp_module.models import (
+    SigortaTahkimSearchRequest
+)
+
 
 # Create a placeholder app that will be properly initialized after tools are defined
 
@@ -355,6 +361,7 @@ sayistay_client_instance = SayistayApiClient()
 sayistay_unified_client_instance = SayistayUnifiedClient()
 kvkk_client_instance = KvkkApiClient()
 bddk_client_instance = BddkApiClient()
+sigorta_tahkim_client_instance = SigortaTahkimApiClient()
 
 # Health check client (singleton for reuse)
 _health_check_client: Optional[httpx.AsyncClient] = None
@@ -1702,7 +1709,8 @@ def perform_cleanup():
         globals().get('sayistay_client_instance'),
         globals().get('sayistay_unified_client_instance'),
         globals().get('kvkk_client_instance'),
-        globals().get('bddk_client_instance')
+        globals().get('bddk_client_instance'),
+        globals().get('sigorta_tahkim_client_instance')
     ]
     async def close_all_clients_async():
         tasks = []
@@ -2101,6 +2109,164 @@ async def get_bddk_document_markdown(
             "markdown_content": "",
             "page_number": page_number,
             "total_pages": 0,
+            "error": str(e)
+        }
+
+# --- MCP Tools for Sigorta Tahkim Komisyonu (Insurance Arbitration Commission) ---
+@app.tool(
+    description="Search Sigorta Tahkim Komisyonu (Insurance Arbitration Commission) decisions from Hakem Karar Dergisi journals (64 issues, 2010-2025). Covers insurance disputes: traffic, health, fire, DASK, life insurance.",
+    annotations={
+        "readOnlyHint": True,
+        "openWorldHint": True,
+        "idempotentHint": True
+    }
+)
+async def search_sigorta_tahkim_decisions(
+    keywords: str = Field(..., description="Search keywords in Turkish (e.g., 'trafik sigortası', 'kasko', 'DASK')"),
+    page: int = Field(1, ge=1, description="Page number")
+) -> dict:
+    """Search Sigorta Tahkim Komisyonu insurance arbitration decisions."""
+    logger.info(f"Sigorta Tahkim search tool called with keywords: {keywords}, page: {page}")
+
+    pageSize = 10
+
+    try:
+        search_request = SigortaTahkimSearchRequest(
+            keywords=keywords,
+            page=page,
+            pageSize=pageSize
+        )
+
+        result = await sigorta_tahkim_client_instance.search_decisions(search_request)
+        logger.info(f"Sigorta Tahkim search completed. Found {len(result.decisions)} results on page {page}")
+
+        return {
+            "decisions": [
+                {
+                    "title": dec.title,
+                    "document_id": dec.document_id,
+                    "content": dec.content,
+                    "url": dec.url
+                }
+                for dec in result.decisions
+            ],
+            "total_results": result.total_results,
+            "page": result.page,
+            "pageSize": result.pageSize
+        }
+
+    except Exception as e:
+        logger.exception(f"Error searching Sigorta Tahkim decisions: {e}")
+        return {
+            "decisions": [],
+            "total_results": 0,
+            "page": page,
+            "pageSize": pageSize,
+            "error": str(e)
+        }
+
+@app.tool(
+    description="Retrieve full PDF content of a Sigorta Tahkim Komisyonu Hakem Karar Dergisi issue by number. Returns paginated Markdown. Issues 1-64 available (2010-2025).",
+    annotations={
+        "readOnlyHint": True,
+        "openWorldHint": False,
+        "idempotentHint": True
+    }
+)
+async def get_sigorta_tahkim_document_markdown(
+    issue_number: str = Field(..., description="Journal issue number (1-64, e.g., '64')"),
+    page_number: int = Field(1, ge=1, description="Page number for paginated content")
+) -> dict:
+    """Retrieve Sigorta Tahkim journal issue PDF as paginated Markdown."""
+    logger.info(f"Sigorta Tahkim document retrieval for issue: {issue_number}, page: {page_number}")
+
+    if not issue_number or not issue_number.strip():
+        return {
+            "document_id": issue_number,
+            "markdown_content": "",
+            "page_number": page_number,
+            "total_pages": 0,
+            "source_url": "",
+            "error": "Issue number is required"
+        }
+
+    try:
+        result = await sigorta_tahkim_client_instance.get_document_markdown(issue_number, page_number)
+        logger.info(f"Sigorta Tahkim document retrieved. Page {result.page_number}/{result.total_pages}")
+
+        return {
+            "document_id": result.document_id,
+            "markdown_content": result.markdown_content,
+            "page_number": result.page_number,
+            "total_pages": result.total_pages,
+            "source_url": result.source_url
+        }
+
+    except Exception as e:
+        logger.exception(f"Error retrieving Sigorta Tahkim document: {e}")
+        return {
+            "document_id": issue_number,
+            "markdown_content": "",
+            "page_number": page_number,
+            "total_pages": 0,
+            "source_url": "",
+            "error": str(e)
+        }
+
+@app.tool(
+    description="Search within a specific Sigorta Tahkim Komisyonu journal issue for keywords. Downloads the PDF, splits into individual decisions, and returns matching decisions with excerpts sorted by relevance.",
+    annotations={
+        "readOnlyHint": True,
+        "openWorldHint": False,
+        "idempotentHint": True
+    }
+)
+async def search_within_sigorta_tahkim_issue(
+    issue_number: str = Field(..., description="Journal issue number (1-64, e.g., '64')"),
+    keyword: str = Field(..., description="Search keyword in Turkish (e.g., 'trafik kazası', 'tazminat')"),
+    max_results: int = Field(10, ge=1, le=25, description="Max matching decisions to return")
+) -> dict:
+    """Search for keywords within a specific Sigorta Tahkim journal issue's decisions."""
+    logger.info(f"Sigorta Tahkim search_within called: issue={issue_number}, keyword={keyword}")
+
+    if not issue_number or not issue_number.strip():
+        return {"issue_number": issue_number, "keyword": keyword, "matches": [], "error": "Issue number is required"}
+    if not keyword or not keyword.strip():
+        return {"issue_number": issue_number, "keyword": keyword, "matches": [], "error": "Keyword is required"}
+
+    try:
+        result = await sigorta_tahkim_client_instance.search_within_issue(
+            issue_number, keyword, max_results
+        )
+        logger.info(
+            f"Sigorta Tahkim search_within completed: "
+            f"{result.matching_decisions}/{result.total_decisions} decisions match"
+        )
+
+        return {
+            "issue_number": result.issue_number,
+            "keyword": result.keyword,
+            "total_decisions": result.total_decisions,
+            "matching_decisions": result.matching_decisions,
+            "matches": [
+                {
+                    "decision_header": m.decision_header,
+                    "relevance_score": m.relevance_score,
+                    "excerpt": m.excerpt,
+                    "body_length": m.body_length
+                }
+                for m in result.matches
+            ]
+        }
+
+    except Exception as e:
+        logger.exception(f"Error in search_within Sigorta Tahkim: {e}")
+        return {
+            "issue_number": issue_number,
+            "keyword": keyword,
+            "total_decisions": 0,
+            "matching_decisions": 0,
+            "matches": [],
             "error": str(e)
         }
 
